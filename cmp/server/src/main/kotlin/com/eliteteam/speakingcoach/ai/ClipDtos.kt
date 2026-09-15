@@ -3,6 +3,11 @@ package com.eliteteam.speakingcoach.ai
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class SessionCreateRequest(
+    val sessionId: String? = null,
+)
+
+@Serializable
 data class SessionCreatedResponse(
     val sessionId: String,
     val greeting: GreetingResponse,

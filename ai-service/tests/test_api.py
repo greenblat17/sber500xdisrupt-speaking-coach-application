@@ -132,6 +132,24 @@ def test_second_clip_includes_dialogue_history() -> None:
     assert second_history == ["my name is Alex", "Got it: my name is Alex"]
 
 
+def test_create_session_with_id_is_get_or_create() -> None:
+    app, _, _, _ = build_app()
+    with TestClient(app) as client:
+        first = client.post("/v1/sessions", json={"sessionId": "tg-42"})
+        assert first.status_code == 201
+        assert first.json()["sessionId"] == "tg-42"
+        second = client.post("/v1/sessions", json={"sessionId": "tg-42"})
+        assert second.status_code == 201
+        assert second.json()["sessionId"] == "tg-42"
+        created = client.post(
+            "/v1/clips",
+            data={"sessionId": "tg-42"},
+            files={"audio": ("voice.ogg", b"fake-ogg", "audio/ogg")},
+        )
+        assert created.status_code == 202
+        assert _wait_status(client, created.json()["jobId"])["status"] == "ok"
+
+
 def test_clip_includes_coaching_notes() -> None:
     notes = [
         "You said: I was in Turkey last summer with my friends.",

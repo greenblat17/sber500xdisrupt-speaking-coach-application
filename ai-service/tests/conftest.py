@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.config import Settings
-from app.dialogue import DialogueStore
+from app.dialogue import MemoryDialogueStore
 from app.llm import ChatModel, LlmTurn
 from app.main import create_app
 from app.pipeline import ClipPipeline
@@ -21,6 +21,7 @@ def test_settings() -> Settings:
         tts_voice="coral",
         tts_response_format="opus",
         ffmpeg_bin="ffmpeg",
+        redis_url=None,
         dialogue_ttl_seconds=86400,
         dialogue_max_messages=40,
         job_ttl_seconds=600,
@@ -63,11 +64,11 @@ def build_app(
     stt: FakeStt | None = None,
     llm: FakeLlm | None = None,
     tts: FakeTts | None = None,
-    dialogue: DialogueStore | None = None,
+    dialogue: MemoryDialogueStore | None = None,
 ):
     stt = stt or FakeStt(["hello"])
     llm = llm or FakeLlm()
     tts = tts or FakeTts()
-    dialogue = dialogue or DialogueStore(max_messages=40, ttl_seconds=86400)
+    dialogue = dialogue or MemoryDialogueStore(max_messages=40, ttl_seconds=86400)
     pipeline = ClipPipeline(stt=stt, llm=llm, tts=tts, dialogue=dialogue)
     return create_app(settings=test_settings(), pipeline=pipeline), stt, llm, tts

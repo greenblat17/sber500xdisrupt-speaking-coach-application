@@ -44,4 +44,6 @@ OPENAI_API_KEY=...
 docker compose --profile llm up --build
 ```
 
-Host port for the real service is **8091**.
+Host port for the real service is **8091**. Dialogue history is stored in Redis (`REDIS_URL`).
+
+CI starts Redis on the VPS before each ai-service deploy (`infra/redis/deploy-remote.sh`: create if missing, otherwise leave it). Do not recreate Redis with `docker rm`. The Python container joins Docker network `speaking-coach` and uses `REDIS_URL=redis://redis:6379/0`.

@@ -11,10 +11,13 @@ import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
+import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
@@ -30,12 +33,8 @@ class HttpClipClient(
 ) : ClipProcessor {
     private val root = baseUrl.trimEnd('/')
 
-    suspend fun startSession(): SessionGreeting {
-        val response = http.post("$root/v1/sessions")
-        if (response.status != HttpStatusCode.Created && !response.status.isSuccess()) {
-            error("ai-service POST /v1/sessions returned ${response.status}")
-        }
-        val created = response.body<SessionCreatedResponse>()
+    suspend fun startSession(sessionId: SessionId? = null): SessionGreeting {
+        val created = createSession(sessionId)
         val audio = http.get("$root/v1/sessions/${created.sessionId}/greeting/audio")
         if (!audio.status.isSuccess()) {
             error("ai-service GET greeting audio returned ${audio.status}")
@@ -50,6 +49,23 @@ class HttpClipClient(
                 fileName = "greeting.ogg",
             ),
         )
+    }
+
+    suspend fun ensureSession(sessionId: SessionId): SessionId {
+        return SessionId(createSession(sessionId).sessionId)
+    }
+
+    private suspend fun createSession(sessionId: SessionId?): SessionCreatedResponse {
+        val response = http.post("$root/v1/sessions") {
+            if (sessionId != null) {
+                contentType(ContentType.Application.Json)
+                setBody(SessionCreateRequest(sessionId.value))
+            }
+        }
+        if (response.status != HttpStatusCode.Created && !response.status.isSuccess()) {
+            error("ai-service POST /v1/sessions returned ${response.status}")
+        }
+        return response.body()
     }
 
     override suspend fun process(sessionId: SessionId, clip: AudioClip): ClipReply {

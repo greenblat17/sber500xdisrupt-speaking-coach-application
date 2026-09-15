@@ -14,11 +14,13 @@ on:
     paths:
       - 'ai-service/**'
       - 'infra/ai-service/**'
+      - 'infra/redis/**'
       - '.github/workflows/ai-service.yml'
   pull_request:
     paths:
       - 'ai-service/**'
       - 'infra/ai-service/**'
+      - 'infra/redis/**'
       - '.github/workflows/ai-service.yml'
 
 permissions:
@@ -90,7 +92,8 @@ jobs:
       - name: Stage runtime files
         run: |
           cp infra/ai-service/deploy-remote.sh vps-upload/deploy-remote.sh
-          chmod +x vps-upload/deploy-remote.sh
+          cp infra/redis/deploy-remote.sh vps-upload/deploy-redis.sh
+          chmod +x vps-upload/deploy-remote.sh vps-upload/deploy-redis.sh
 
       - name: Copy files and restart container
         run: |
@@ -107,10 +110,13 @@ jobs:
             vps-upload/Dockerfile \
             vps-upload/requirements.txt \
             vps-upload/deploy-remote.sh \
+            vps-upload/deploy-redis.sh \
             "${AI_SERVICE_USER}@${AI_SERVICE_HOST}:/opt/ai-service/"
           scp -r "${SSH_OPTS[@]}" \
             vps-upload/app \
             "${AI_SERVICE_USER}@${AI_SERVICE_HOST}:/opt/ai-service/app"
+          ssh "${SSH_OPTS[@]}" "${AI_SERVICE_USER}@${AI_SERVICE_HOST}" \
+            bash /opt/ai-service/deploy-redis.sh
           ssh "${SSH_OPTS[@]}" "${AI_SERVICE_USER}@${AI_SERVICE_HOST}" \
             GROQ_API_KEY="$GROQ_API_KEY" \
             OPENAI_API_KEY="$OPENAI_API_KEY" \

@@ -38,6 +38,7 @@ class Settings:
     tts_voice: str
     tts_response_format: str
     ffmpeg_bin: str
+    redis_url: str | None
     dialogue_ttl_seconds: int
     dialogue_max_messages: int
     job_ttl_seconds: int
@@ -57,6 +58,7 @@ class Settings:
             tts_voice=_env("TTS_VOICE", "af_heart") or "af_heart",
             tts_response_format=_env("TTS_RESPONSE_FORMAT", "mp3") or "mp3",
             ffmpeg_bin=_env("FFMPEG_BIN", "ffmpeg") or "ffmpeg",
+            redis_url=_env("REDIS_URL"),
             dialogue_ttl_seconds=_int_env("DIALOGUE_TTL_SECONDS", 86400),
             dialogue_max_messages=_int_env("DIALOGUE_MAX_MESSAGES", 40),
             job_ttl_seconds=_int_env("JOB_TTL_SECONDS", 600),

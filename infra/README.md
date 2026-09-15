@@ -24,3 +24,5 @@ docker compose --profile llm up --build
 ```
 
 Остановка: `Ctrl+C` или `docker compose down`.
+
+На VPS Redis поднимает job **AI service → Deploy** (`infra/redis/deploy-remote.sh`): контейнер создаётся, если его ещё нет, и не сносится вместе с ai-service.

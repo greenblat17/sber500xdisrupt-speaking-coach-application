@@ -4,6 +4,13 @@ services:
     ports:
       - "8090:8090"
 
+  redis:
+    profiles: ["llm"]
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - speaking-coach-redis:/data
+
   ai-service:
     profiles: ["llm"]
     build:
@@ -21,6 +28,9 @@ services:
       TTS_MODEL: ${TTS_MODEL:-hexgrad/kokoro-82m}
       TTS_VOICE: ${TTS_VOICE:-af_heart}
       TTS_RESPONSE_FORMAT: ${TTS_RESPONSE_FORMAT:-mp3}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
 
   server:
     build:
@@ -33,3 +43,6 @@ services:
       AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL:-http://ai-service-stub:8090}
     depends_on:
       - ai-service-stub
+
+volumes:
+  speaking-coach-redis:

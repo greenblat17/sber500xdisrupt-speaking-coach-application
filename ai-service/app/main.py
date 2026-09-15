@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 from openai import AsyncOpenAI
 
 from app.config import Settings
-from app.dialogue import DialogueStore
+from app.dialogue import DialogueStore, build_dialogue_store
 from app.jobs import ClipJob, JobStore
 from app.llm import OpenAiChatModel
 from app.pipeline import ClipPipeline
-from app.sessions import GREETING_TEXT, SessionRegistry
+from app.sessions import GREETING_TEXT
 from app.stt import GroqSpeechToText
 from app.tts import OpenAiTextToSpeech
 
@@ -29,12 +31,17 @@ def create_app(
     logging.basicConfig(level=settings.log_level)
     jobs = JobStore(ttl_seconds=settings.job_ttl_seconds)
     clip_pipeline = pipeline or _build_pipeline(settings)
-    sessions = SessionRegistry()
+    sessions = clip_pipeline.dialogue
     greeting_audio: bytes | None = None
     greeting_lock = asyncio.Lock()
     tasks: set[asyncio.Task[None]] = set()
 
-    app = FastAPI()
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        await sessions.aclose()
+
+    app = FastAPI(lifespan=lifespan)
     app.state.settings = settings
     app.state.jobs = jobs
     app.state.pipeline = clip_pipeline
@@ -44,13 +51,13 @@ def create_app(
         return {"status": "ok"}
 
     @app.post("/v1/sessions", status_code=201)
-    def create_session() -> dict:
-        session_id = sessions.create()
+    async def create_session(request: Request) -> dict:
+        session_id = await sessions.create(await _requested_session_id(request))
         return {"sessionId": session_id, "greeting": {"text": GREETING_TEXT}}
 
     @app.get("/v1/sessions/{session_id}/greeting/audio")
     async def greeting_audio_route(session_id: str) -> Response:
-        if not sessions.exists(session_id):
+        if not await sessions.exists(session_id):
             raise HTTPException(status_code=404, detail="unknown session")
         nonlocal greeting_audio
         async with greeting_lock:
@@ -63,7 +70,7 @@ def create_app(
         sessionId: str = Form(),
         audio: UploadFile = File(),
     ) -> dict[str, str]:
-        if not sessions.exists(sessionId):
+        if not await sessions.exists(sessionId):
             raise HTTPException(status_code=404, detail="unknown session")
         payload = await audio.read()
         if not payload:
@@ -95,7 +102,7 @@ def create_app(
     return app
 
 
-def _build_pipeline(settings: Settings) -> ClipPipeline:
+def _build_pipeline(settings: Settings, dialogue: DialogueStore | None = None) -> ClipPipeline:
     if not settings.groq_api_key:
         raise RuntimeError("GROQ_API_KEY is required")
     if not settings.openai_api_key:
@@ -122,8 +129,25 @@ def _build_pipeline(settings: Settings) -> ClipPipeline:
             settings.tts_response_format,
             settings.ffmpeg_bin,
         ),
-        dialogue=DialogueStore(settings.dialogue_max_messages, settings.dialogue_ttl_seconds),
+        dialogue=dialogue or build_dialogue_store(settings),
     )
+
+
+async def _requested_session_id(request: Request) -> str | None:
+    content_type = request.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        return None
+    try:
+        payload: Any = await request.json()
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get("sessionId")
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 async def _run_job(

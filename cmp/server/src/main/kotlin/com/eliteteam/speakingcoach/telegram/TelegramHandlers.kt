@@ -17,9 +17,10 @@ import dev.inmo.tgbotapi.types.message.content.TextContent
 import dev.inmo.tgbotapi.types.message.content.VoiceContent
 import dev.inmo.tgbotapi.utils.DefaultKTgBotAPIKSLog
 import org.slf4j.LoggerFactory
-import java.util.concurrent.ConcurrentHashMap
 
 internal const val TELEGRAM_WEBHOOK_SECRET_HEADER = "X-Telegram-Bot-Api-Secret-Token"
+
+internal fun telegramSessionId(chatId: Any): SessionId = SessionId("tg-$chatId")
 
 internal fun speakingCoachTelegramBot(token: String) = telegramBot(token) {
     logger = RedactingKSLog(DefaultKTgBotAPIKSLog, token)
@@ -30,12 +31,10 @@ internal fun BehaviourContext.installSpeakingCoachHandlers(
     sessionClipQueue: SessionClipQueue,
 ) {
     val log = LoggerFactory.getLogger("TelegramHandlers")
-    val chats = ConcurrentHashMap<String, SessionId>()
     onCommand("start") { message ->
-        val chatKey = message.chat.id.toString()
+        val sessionId = telegramSessionId(message.chat.id)
         try {
-            val greeting = ai.startSession()
-            chats[chatKey] = greeting.sessionId
+            val greeting = ai.startSession(sessionId)
             reply(message, greeting.text)
             sendVoice(message.chat.id, greeting.audio.bytes.asMultipartFile(greeting.audio.fileName))
             log.info("Started session {} for tg-{}", greeting.sessionId.value, message.chat.id)
@@ -47,9 +46,9 @@ internal fun BehaviourContext.installSpeakingCoachHandlers(
     onContentMessage { message ->
         when (val content = message.content) {
             is VoiceContent -> {
-                val chatKey = message.chat.id.toString()
+                val sessionId = telegramSessionId(message.chat.id)
                 try {
-                    val sessionId = chats.getOrPut(chatKey) { ai.startSession().sessionId }
+                    ai.ensureSession(sessionId)
                     val result = sessionClipQueue.submit(
                         sessionId = sessionId,
                         source = {

@@ -10,6 +10,8 @@ LLM_MODEL="${LLM_MODEL:-openai/gpt-4o-mini}"
 TTS_MODEL="${TTS_MODEL:-hexgrad/kokoro-82m}"
 TTS_VOICE="${TTS_VOICE:-af_heart}"
 TTS_RESPONSE_FORMAT="${TTS_RESPONSE_FORMAT:-mp3}"
+REDIS_URL="${REDIS_URL:-redis://redis:6379/0}"
+NETWORK=speaking-coach
 
 umask 077
 {
@@ -20,6 +22,7 @@ umask 077
   printf 'TTS_MODEL=%s\n' "$TTS_MODEL"
   printf 'TTS_VOICE=%s\n' "$TTS_VOICE"
   printf 'TTS_RESPONSE_FORMAT=%s\n' "$TTS_RESPONSE_FORMAT"
+  printf 'REDIS_URL=%s\n' "$REDIS_URL"
 } > "$APP/.env"
 chmod 600 "$APP/.env"
 
@@ -29,8 +32,10 @@ cp "$APP/Dockerfile" "$APP/requirements.txt" "$BUILD/"
 cp -R "$APP/app" "$BUILD/app"
 docker build -t ai-service:local "$BUILD"
 rm -rf "$BUILD"
+docker network create "$NETWORK" >/dev/null 2>&1 || true
 docker rm -f ai-service >/dev/null 2>&1 || true
 docker run -d --name ai-service --restart unless-stopped \
+  --network "$NETWORK" \
   -p 127.0.0.1:8090:8090 \
   --env-file "$APP/.env" \
   ai-service:local
