@@ -12,4 +12,15 @@ docker compose up --build
 
 Telegram-бот работает только через webhook (TLS + `TELEGRAM_WEBHOOK_URL` на VPS).
 
+Реальный ai-service (STT → LLM → TTS), порт на хосте 8091:
+
+```bash
+# в infra/.env
+AI_SERVICE_BASE_URL=http://ai-service:8090
+GROQ_API_KEY=...
+OPENAI_API_KEY=...
+# OpenRouter key in OPENAI_API_KEY
+docker compose --profile llm up --build
+```
+
 Остановка: `Ctrl+C` или `docker compose down`.

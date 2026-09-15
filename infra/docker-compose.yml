@@ -4,6 +4,24 @@ services:
     ports:
       - "8090:8090"
 
+  ai-service:
+    profiles: ["llm"]
+    build:
+      context: ../ai-service
+      dockerfile: Dockerfile
+    ports:
+      - "8091:8090"
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      STT_MODEL: ${STT_MODEL:-whisper-large-v3}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-4o-mini}
+      TTS_MODEL: ${TTS_MODEL:-hexgrad/kokoro-82m}
+      TTS_VOICE: ${TTS_VOICE:-af_heart}
+      TTS_RESPONSE_FORMAT: ${TTS_RESPONSE_FORMAT:-mp3}
+
   server:
     build:
       context: ..
@@ -12,6 +30,6 @@ services:
       - "8080:8080"
     environment:
       SERVER_PORT: "8080"
-      AI_SERVICE_BASE_URL: http://ai-service-stub:8090
+      AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL:-http://ai-service-stub:8090}
     depends_on:
       - ai-service-stub

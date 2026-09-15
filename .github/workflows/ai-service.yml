@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: Deploy stub to VPS after Approve
+        description: Deploy to VPS after Approve
         type: boolean
         default: true
   push:
@@ -12,12 +12,12 @@ on:
       - main
       - master
     paths:
-      - 'infra/ai-service-stub/**'
+      - 'ai-service/**'
       - 'infra/ai-service/**'
       - '.github/workflows/ai-service.yml'
   pull_request:
     paths:
-      - 'infra/ai-service-stub/**'
+      - 'ai-service/**'
       - 'infra/ai-service/**'
       - '.github/workflows/ai-service.yml'
 
@@ -32,16 +32,36 @@ jobs:
   package:
     name: Package
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ai-service
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Upload stub
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test
+        run: |
+          pip install -r requirements-dev.txt
+          pytest
+
+      - name: Stage runtime
+        run: |
+          STAGE="$RUNNER_TEMP/ai-service-runtime"
+          mkdir -p "$STAGE"
+          cp Dockerfile requirements.txt "$STAGE/"
+          cp -R app "$STAGE/app"
+
+      - name: Upload runtime
         uses: actions/upload-artifact@v6
         with:
-          name: ai-service-stub
-          path: |
-            infra/ai-service-stub
+          name: ai-service
+          path: ${{ runner.temp }}/ai-service-runtime
           if-no-files-found: error
           retention-days: 1
 
@@ -55,14 +75,16 @@ jobs:
       AI_SERVICE_HOST: ${{ secrets.AI_SERVICE_HOST }}
       AI_SERVICE_USER: ${{ secrets.AI_SERVICE_USER }}
       AI_SERVICE_SSH_KEY: ${{ secrets.AI_SERVICE_SSH_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Download stub
+      - name: Download runtime
         uses: actions/download-artifact@v7
         with:
-          name: ai-service-stub
+          name: ai-service
           path: vps-upload
 
       - name: Stage runtime files
@@ -79,12 +101,17 @@ jobs:
           SSH_OPTS=(-i "$KEY" -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes)
           ssh "${SSH_OPTS[@]}" "${AI_SERVICE_USER}@${AI_SERVICE_HOST}" \
             mkdir -p /opt/ai-service
+          ssh "${SSH_OPTS[@]}" "${AI_SERVICE_USER}@${AI_SERVICE_HOST}" \
+            rm -rf /opt/ai-service/app /opt/ai-service/main.py /opt/ai-service/greeting.ogg
           scp "${SSH_OPTS[@]}" \
             vps-upload/Dockerfile \
-            vps-upload/main.py \
             vps-upload/requirements.txt \
-            vps-upload/greeting.ogg \
             vps-upload/deploy-remote.sh \
             "${AI_SERVICE_USER}@${AI_SERVICE_HOST}:/opt/ai-service/"
+          scp -r "${SSH_OPTS[@]}" \
+            vps-upload/app \
+            "${AI_SERVICE_USER}@${AI_SERVICE_HOST}:/opt/ai-service/app"
           ssh "${SSH_OPTS[@]}" "${AI_SERVICE_USER}@${AI_SERVICE_HOST}" \
+            GROQ_API_KEY="$GROQ_API_KEY" \
+            OPENAI_API_KEY="$OPENAI_API_KEY" \
             bash /opt/ai-service/deploy-remote.sh
